@@ -71,7 +71,7 @@ export function getAuthConfig(host: string): {
     case HostMap['prod']:
       domain = 'https://auth.sentio.xyz'
       clientId = '66oqMrep54LVI9ckH97cw8C4GBA1cpKW'
-      audience = 'https://api.sentio.xyz/v1'
+      audience = 'https://app.sentio.xyz/api/v1'
       redirectUri = 'https://app.sentio.xyz/redirect/sdk'
       break
     case HostMap['test']:
@@ -101,11 +101,21 @@ export function overrideConfigWithOptions(config: YamlProjectConfig, options: an
     config.numWorkers = options.numWorkers
   }
   if (options.sentioNetwork) {
-    if (!['mainnet', 'testnet'].includes(options.sentioNetwork)) {
-      console.error(`Invalid sentio network: ${options.sentioNetwork}, only mainnet or testnet is allowed`)
-      process.exit(1)
+    switch (options.sentioNetwork) {
+      case 'mainnet':
+        config.sentioNetwork = '789210'
+        break
+      case 'testnet':
+        config.sentioNetwork = '7892101'
+        break
+      case '7892101':
+      case '789210':
+        config.sentioNetwork = options.sentioNetwork
+        break
+      default:
+        console.error(`Invalid sentio network: ${options.sentioNetwork}, only mainnet or testnet is allowed`)
+        process.exit(1)
     }
-    config.sentioNetwork = options.sentioNetwork
   }
 }
 

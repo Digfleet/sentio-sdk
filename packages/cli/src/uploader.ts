@@ -36,6 +36,10 @@ export interface UploadPayload {
     blobId: string
     quiltPatchId: string
   }
+  ipfs?: {
+    cid: string
+    putUrl: string
+  }
   file_type: FileType
 }
 
@@ -229,6 +233,71 @@ export class DefaultBatchUploader extends BatchUploader {
   }
 }
 
+export class IPFSBatchUploader extends BatchUploader {
+  constructor(options: YamlProjectConfig, auth: Auth) {
+    super(StorageEngine.DEFAULT, options, auth)
+  }
+
+  async upload(
+    files: Files,
+    commitSha?: string,
+    gitUrl?: string,
+    debug?: boolean,
+    continueFrom?: number,
+    networkOverrides?: NetworkOverride[],
+    rollback?: Record<string, number>
+  ): Promise<FinishBatchUploadResponse> {
+    const fileTypes: Record<string, FileType> = {
+      source: FileType.SOURCE,
+      code: FileType.PROCESSOR
+    }
+
+    const initResponse = await this.initUpload(fileTypes)
+
+    for (const [fileKey, payload] of Object.entries(initResponse.payloads)) {
+      const putUrl = payload.object?.putUrl || payload.ipfs?.putUrl
+      if (!putUrl) {
+        throw new Error(`No IPFS put URL found for file: ${fileKey}`)
+      }
+      const fileContent = files[fileKey as keyof Files]
+      if (!fileContent) {
+        throw new Error(`File content not found for key: ${fileKey}`)
+      }
+
+      const formData = new FormData()
+      const blob = new Blob([fileContent], { type: 'application/octet-stream' })
+      formData.append('file', blob, fileKey) // 'file' is a common field name for single file uploads
+
+      const uploadResponse = await fetch(putUrl, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error(
+          `Failed to upload file ${fileKey} to IPFS: ${uploadResponse.status} ${uploadResponse.statusText}`
+        )
+      } else {
+        const resp: any = await uploadResponse.json()
+        const cid = resp.Hash
+        payload.ipfs = { cid, putUrl }
+      }
+    }
+
+    return this.finishUpload(
+      files,
+      initResponse.payloads,
+      commitSha,
+      gitUrl,
+      debug,
+      continueFrom,
+      networkOverrides,
+      rollback,
+      this.options?.numWorkers
+    )
+  }
+}
+
 export class WalrusBatchUploader extends BatchUploader {
   constructor(options: YamlProjectConfig, auth: Auth) {
     super(StorageEngine.WALRUS, options, auth)
@@ -351,7 +420,7 @@ export async function initUpload(
   sequence: number,
   contentType?: string
 ) {
-  const initUploadUrl = getApiUrl(`packages/cli/src/uploader.ts`, host)
+  const initUploadUrl = getApiUrl(`/v1/processors/init_upload`, host)
   return fetch(initUploadUrl.href, {
     method: 'POST',
     headers: {
