@@ -50,7 +50,7 @@ export class TypedActionProcessor {
     schema: TSchemNoBody<TQuery, TPath>,
     handler: TypedActionHandler<never, TQuery, TPath>
   ): TypedActionProcessor {
-    return this.onAction('PUT', path, schema, handler)
+    return this.onAction('DELETE', path, schema, handler)
   }
 
   onAction<TBody extends Type<any>, TQuery extends Type<any>, TPath extends Type<any>>(
